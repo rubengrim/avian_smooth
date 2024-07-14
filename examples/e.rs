@@ -2,7 +2,7 @@ use avian3d::prelude::*;
 use avian_smooth::*;
 use bevy::prelude::*;
 
-const PHYSICS_UPDATE_FREQ: f64 = 10.0;
+const PHYSICS_UPDATE_FREQ: f64 = 60.0;
 
 fn main() {
     App::new()
@@ -12,8 +12,9 @@ fn main() {
             AvianInterpolationPlugin,
         ))
         .insert_resource(Time::new_with(Physics::fixed_hz(PHYSICS_UPDATE_FREQ)))
+        .insert_resource(IsInterpolating(true))
         .add_systems(Startup, setup)
-        .add_systems(Update, update_box)
+        .add_systems(Update, (update_box, toggle_interpolation, update_ui))
         .run();
 }
 
@@ -22,7 +23,7 @@ fn setup(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
-    // The entity being transformed by Avian
+    // The rigidbody
     commands.spawn((
         RigidBody::Kinematic,
         Position::default(),
@@ -36,7 +37,8 @@ fn setup(
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
         },
-        PositionInterpolation::default(),
+        // PositionInterpolation::default(),
+        // RotationInterpolation::default(),
     ));
 
     // Camera
@@ -61,7 +63,7 @@ fn setup(
         TextBundle::from_section(
             "",
             TextStyle {
-                font_size: 18.0,
+                font_size: 15.0,
                 color: Color::WHITE,
                 ..default()
             },
@@ -103,40 +105,40 @@ fn update_box(
 
 // IsInterpolating has no effect on actual interpolation and is just for ui.
 // Toggle interpolation with InterpolatedPosition::pass_raw and InterpolatedRotation::pass_raw instead.
-// #[derive(Resource)]
-// struct IsInterpolating(bool);
+#[derive(Resource)]
+struct IsInterpolating(bool);
 
-// fn toggle_interpolation(
-//     mut interp_q: Query<(&mut PositionInterpolation)>,
-//     mut is_interpolating: ResMut<IsInterpolating>,
-//     keyboard_input: Res<ButtonInput<KeyCode>>,
-// ) {
-//     if keyboard_input.just_pressed(KeyCode::Space) {
-//         let (mut pos, mut rot) = interp_q.single_mut();
-//         pos.pass_raw = !pos.pass_raw;
-//         rot.pass_raw = !rot.pass_raw;
+fn toggle_interpolation(
+    mut interp_q: Query<(&mut PositionInterpolation, &mut RotationInterpolation)>,
+    mut is_interpolating: ResMut<IsInterpolating>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        let (mut pos, mut rot) = interp_q.single_mut();
+        pos.disabled = !pos.disabled;
+        rot.disabled = !rot.disabled;
 
-//         is_interpolating.0 = !pos.pass_raw;
-//     }
-// }
+        is_interpolating.0 = !pos.disabled;
+    }
+}
 
-// fn update_ui(mut text: Query<&mut Text>, is_interpolating: Res<IsInterpolating>) {
-//     let mut text = text.single_mut();
-//     let text = &mut text.sections[0].value;
+fn update_ui(mut text: Query<&mut Text>, is_interpolating: Res<IsInterpolating>) {
+    let mut text = text.single_mut();
+    let text = &mut text.sections[0].value;
 
-//     text.clear();
+    text.clear();
 
-//     text.push_str("Move box with <WASD>");
-//     text.push_str("\nToggle interpolation with <Space>");
+    text.push_str("Move box with <WASD>");
+    text.push_str("\nToggle interpolation with <Space>");
 
-//     if is_interpolating.0 {
-//         text.push_str("\n\nInterpolation: on");
-//     } else {
-//         text.push_str("\n\nInterpolation: off");
-//     }
+    if is_interpolating.0 {
+        text.push_str("\n\nInterpolation: on");
+    } else {
+        text.push_str("\n\nInterpolation: off");
+    }
 
-//     text.push_str(&format!(
-//         "\nPhysics update frequency: {}hz (See PHYSICS_UPDATE_FREQ const in 'examples/box.rs')",
-//         PHYSICS_UPDATE_FREQ
-//     ));
-// }
+    text.push_str(&format!(
+        "\nPhysics update frequency: {}hz",
+        PHYSICS_UPDATE_FREQ
+    ));
+}
