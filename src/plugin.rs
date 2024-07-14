@@ -4,26 +4,24 @@ use avian3d::{
 };
 use bevy::prelude::*;
 
-/// System set running in `PostUpdate` between `PhysicsSet::Sync` and `TransformSystem::TransformPropagate`
-#[derive(SystemSet, Debug, PartialEq, Eq, Clone, Hash)]
-pub enum InterpolationSet {
-    /// Where the interpolation takes place.
-    Interpolate,
-    /// Can be used to safely schedule systems after interpolation but before transforms are propagated by bevy.
-    /// One use case could be to update the position of a camera that follows a physics object here, so the camera doesn't lag behind one frame.
-    /// Empty by default
-    PostInterpolation,
-}
+use crate::GlobalInterpolation;
 
 pub struct AvianInterpolationPlugin;
 
 impl Plugin for AvianInterpolationPlugin {
     fn build(&self, app: &mut App) {
+        app.register_type::<GlobalInterpolation>();
+
+        app.add_systems(
+            Update,
+            crate::set_object_interpolation.run_if(resource_exists::<crate::GlobalInterpolation>),
+        );
+
         app.configure_sets(
             PostUpdate,
             (
-                InterpolationSet::Interpolate,
-                InterpolationSet::PostInterpolation,
+                crate::InterpolationSet::Interpolate,
+                crate::InterpolationSet::PostInterpolation,
             )
                 .chain()
                 .after(PhysicsSet::Sync)
@@ -50,7 +48,7 @@ impl Plugin for AvianInterpolationPlugin {
         .add_systems(
             PostUpdate,
             (crate::interpolate_position, crate::interpolate_rotation)
-                .in_set(InterpolationSet::Interpolate),
+                .in_set(crate::InterpolationSet::Interpolate),
         );
     }
 }

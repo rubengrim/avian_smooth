@@ -4,6 +4,17 @@ use bevy::prelude::*;
 mod plugin;
 pub use plugin::*;
 
+/// System set running in `PostUpdate` between `PhysicsSet::Sync` and `TransformSystem::TransformPropagate`
+#[derive(SystemSet, Debug, PartialEq, Eq, Clone, Hash)]
+pub enum InterpolationSet {
+    /// Where the interpolation takes place.
+    Interpolate,
+    /// Can be used to safely schedule systems after interpolation but before transforms are propagated by bevy.
+    /// One use case could be to update the position of a camera that follows a physics object here, so the camera doesn't lag behind one frame.
+    /// Empty by default
+    PostInterpolation,
+}
+
 #[derive(Component, Default)]
 pub struct PositionInterpolation {
     pub disabled: bool,
@@ -17,6 +28,113 @@ pub struct RotationInterpolation {
     pub last_rotation: Option<Quat>,
     pub current_rotation: Option<Quat>,
 }
+
+#[derive(Bundle, Default)]
+pub struct InterpolationBundle {
+    pub position: PositionInterpolation,
+    pub rotation: RotationInterpolation,
+}
+
+#[derive(Resource, Clone, Debug, Default, Reflect)]
+#[reflect(Resource)]
+pub enum GlobalInterpolation {
+    None,
+    PositionOnly,
+    RotationOnly,
+    #[default]
+    PositionAndRotation,
+}
+
+// TODO: Is there a simpler way to do this??
+pub fn set_object_interpolation(
+    mut commands: Commands,
+    global_interp: Res<GlobalInterpolation>,
+    with_none: Query<
+        Entity,
+        (
+            With<RigidBody>,
+            Without<PositionInterpolation>,
+            Without<RotationInterpolation>,
+        ),
+    >,
+    with_pos_only: Query<
+        Entity,
+        (
+            With<RigidBody>,
+            With<PositionInterpolation>,
+            Without<RotationInterpolation>,
+        ),
+    >,
+    with_rot_only: Query<
+        Entity,
+        (
+            With<RigidBody>,
+            Without<PositionInterpolation>,
+            With<RotationInterpolation>,
+        ),
+    >,
+    with_both: Query<
+        Entity,
+        (
+            With<RigidBody>,
+            With<PositionInterpolation>,
+            With<RotationInterpolation>,
+        ),
+    >,
+) {
+    match *global_interp {
+        GlobalInterpolation::None => {
+            for e in with_pos_only.iter() {
+                commands.entity(e).remove::<PositionInterpolation>();
+            }
+            for e in with_rot_only.iter() {
+                commands.entity(e).remove::<RotationInterpolation>();
+            }
+            for e in with_both.iter() {
+                commands.entity(e).remove::<InterpolationBundle>();
+            }
+        }
+        GlobalInterpolation::PositionOnly => {
+            for e in with_none.iter() {
+                commands.entity(e).insert(PositionInterpolation::default());
+            }
+            for e in with_rot_only.iter() {
+                commands.entity(e).remove::<RotationInterpolation>();
+                commands.entity(e).insert(PositionInterpolation::default());
+            }
+            for e in with_both.iter() {
+                commands.entity(e).remove::<RotationInterpolation>();
+            }
+        }
+        GlobalInterpolation::RotationOnly => {
+            for e in with_none.iter() {
+                commands.entity(e).insert(RotationInterpolation::default());
+            }
+            for e in with_pos_only.iter() {
+                commands.entity(e).remove::<PositionInterpolation>();
+                commands.entity(e).insert(RotationInterpolation::default());
+            }
+            for e in with_both.iter() {
+                commands.entity(e).remove::<PositionInterpolation>();
+            }
+        }
+        GlobalInterpolation::PositionAndRotation => {
+            for e in with_none.iter() {
+                commands.entity(e).insert(InterpolationBundle::default());
+            }
+            for e in with_pos_only.iter() {
+                commands.entity(e).insert(RotationInterpolation::default());
+            }
+            for e in with_rot_only.iter() {
+                commands.entity(e).insert(PositionInterpolation::default());
+            }
+        }
+    }
+}
+
+// ---------------------- //
+// POSITION INTERPOLATION //
+// ---------------------- //
 
 // Resets `Transform`s and `Position`s to their "real" non-interpolated values right before physics is ran.
 fn pre_phys_position_reset(
@@ -80,9 +198,9 @@ fn interpolate_position(
     }
 }
 
-// ---------------- //
-// BEGIN: ROTATION //
-// ---------------- //
+// ---------------------- //
+// ROTATION INTERPOLATION //
+// ---------------------- //
 
 // Resets `Transform`s and `Rotations`s to their "real" non-interpolated values right before physics is ran.
 fn pre_phys_rotation_reset(

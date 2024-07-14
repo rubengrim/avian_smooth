@@ -1,8 +1,9 @@
 use avian3d::prelude::*;
 use avian_smooth::*;
 use bevy::prelude::*;
+use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
-const PHYSICS_UPDATE_FREQ: f64 = 60.0;
+const PHYSICS_UPDATE_FREQ: f64 = 10.0;
 
 fn main() {
     App::new()
@@ -10,9 +11,11 @@ fn main() {
             DefaultPlugins,
             PhysicsPlugins::default(),
             AvianInterpolationPlugin,
+            ResourceInspectorPlugin::<GlobalInterpolation>::default(),
         ))
         .insert_resource(Time::new_with(Physics::fixed_hz(PHYSICS_UPDATE_FREQ)))
         .insert_resource(IsInterpolating(true))
+        .insert_resource(GlobalInterpolation::None)
         .add_systems(Startup, setup)
         .add_systems(Update, (update_box, toggle_interpolation, update_ui))
         .run();
@@ -23,13 +26,10 @@ fn setup(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
-    // The rigidbody
     commands.spawn((
         RigidBody::Kinematic,
-        Position::default(),
-        Rotation::default(),
         PbrBundle {
-            mesh: mesh_assets.add(Cuboid::from_size(Vec3::splat(1.))),
+            mesh: mesh_assets.add(Cuboid::from_size(Vec3::splat(1.0))),
             material: material_assets.add(StandardMaterial {
                 base_color: Color::srgb(0.4, 0.8, 0.6),
                 ..default()
@@ -37,8 +37,18 @@ fn setup(
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
         },
-        // PositionInterpolation::default(),
-        // RotationInterpolation::default(),
+    ));
+    commands.spawn((
+        RigidBody::Kinematic,
+        PbrBundle {
+            mesh: mesh_assets.add(Cuboid::from_size(Vec3::splat(1.7))),
+            material: material_assets.add(StandardMaterial {
+                base_color: Color::srgb(1.0, 0.8, 0.6),
+                ..default()
+            }),
+            transform: Transform::from_xyz(2.0, 2.0, 0.0),
+            ..default()
+        },
     ));
 
     // Camera
